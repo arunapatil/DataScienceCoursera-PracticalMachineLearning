@@ -96,7 +96,7 @@ The expected OOB estimate of error rate is 0.81%
 
 Let's take a look at some more results to make sure the model is good.
 Plot the error curve.Also draw a plot to show the importance of various covariates
-```{r}
+```{r, cache=TRUE}
 plot(model_rf$finalModel)
 varImpPlot(model_rf$finalModel)
 ```
@@ -106,7 +106,7 @@ Predict for validation set
 predicted_rf = predict(model_rf, validation)
 confusionMatrix(predicted_rf, validation$classe)
 ```
-Accuracy for prediction is 0.9902% which is very close to the accuracy over the training set.
+Accuracy for prediction is 0.9922 which is very close to the accuracy over the training set.
 
 #Results
 Predict for the test set
