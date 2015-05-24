@@ -1,0 +1,117 @@
+---
+title: "PersonalFitnessActivityQualityPrediction"
+author: "AP"
+date: "Saturday, May 23, 2015"
+output: html_document
+---
+##Summary
+The goal of this project is to predict the quality of quality of exercise for a subject using a set of measurements related to the personal fitness activity performed. 
+The training dataset consists of 19622 observations of 160 variables from 6 subjects. The response variable is 'classe' which can take 5 different values - A, B, C, D, E. We first identified the covariates that did not seem to have to effect on the response variable and created a new training set with just  53 variables. The final model that gave the best prediction results was a Random Forest model.
+
+##Data Processing
+
+Information about the data set, the purpose of the experiment and lots of other detals is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+Load required libraries and read tarining and test data
+```{r, results='hide'}
+library(caret)
+```
+
+```{r, cache=TRUE}
+trainAll = read.csv("pml-training.csv", stringsAsFactors=FALSE)
+testAll = read.csv("pml-testing.csv", stringsAsFactors=FALSE)
+```
+
+Data Cleaning
+
+1. Lot of columns have NA or blank values. Remove these as they will not have a significant impact on the response variable.
+2. Also remove the first 7 columns which are just identifier and book-keeping columns
+3. Remove problem_id from test set as it does not exist in the training set
+4. Convert the response variable classe to a factor
+```{r, cache=TRUE}
+cleanData <- function(data, thresh) {
+  newData = data
+  newData = data[, colSums(is.na(data)) < thresh]   #Remove the columns where number of NAs is greater than thresh
+  newData = newData[, colSums(newData=="") < thresh] #Remove the columns where number of blank values is greater than thresh 
+  newData = newData[, -c(1:7)] 
+    
+  newData;
+}
+
+trainCleaned = cleanData(trainAll, nrow(trainAll) * 0.95) # Remove columns where 95% of the values are NA or blank
+test = cleanData(testAll, nrow(testAll) * 0.95) # Remove columns where 95% of the values are NA or blank
+test$problem_id= NULL #Remove problem_id from test set as it is not present on the training set
+
+trainCleaned$classe = as.factor(trainCleaned$classe) #Convert classe to a factor
+``` 
+The resulting dataframe now has 53 columns
+Check if there are any more near zero variance predictors that can be removed. None found, so we are good to go
+```{r, cache=TRUE, results='hide'}
+nearZeroVar(trainCleaned, saveMetrics=TRUE)
+```
+
+Split the data into training and validation data sets (60-40 split).
+```{r, cache=TRUE}
+inTrain = createDataPartition(trainCleaned$classe, p=0.6, list=FALSE)
+training = trainCleaned[inTrain,]
+validation = trainCleaned[-inTrain,]
+```
+
+#Model Building
+
+First lets try the Linear Discriminant Analysis(lda) method of classification
+```{r, cache=TRUE, results='hide'}
+set.seed(1234)
+model_lda = train(classe ~ ., data=training, method="lda")
+```
+```{r, cache=TRUE}
+model_lda$results
+```
+
+Accuracy for the lda model is 0.698 which is pretty low. 
+
+Now lets try the rpart model 
+```{r, cache=TRUE, results='hide'}
+set.seed(1234)
+model_rpart = train(classe ~ ., data=training, method="rpart")
+```
+```{r, cache=TRUE}
+model_rpart$results
+```
+Accuracy for the rpart model is even worse - 0.514
+
+Now lets try Random Forest. 
+Use 10 fold cross-validation
+```{r, cache=TRUE, results='hide'}
+set.seed(54321)
+fitControl = trainControl(method="cv", number=10)
+model_rf <- train(classe ~ ., data=training, method="rf", trControl=fitControl)
+```
+```{r, cache=TRUE}
+model_rf$results
+model_rf$finalModel
+```
+Accuracy for the Random Forest model is excellent - 0.991
+The expected OOB estimate of error rate is 0.81%
+
+Let's take a look at some more results to make sure the model is good.
+Plot the error curve.Also draw a plot to show the importance of various covariates
+```{r}
+plot(model_rf$finalModel)
+varImpPlot(model_rf$finalModel)
+```
+
+Predict for validation set
+```{r, cache=TRUE}
+predicted_rf = predict(model_rf, validation)
+confusionMatrix(predicted_rf, validation$classe)
+```
+Accuracy for prediction is 0.9902% which is very close to the accuracy over the training set.
+
+#Results
+Predict for the test set
+```{r, cache=TRUE}
+predicted_test = predict(model_rf, test)
+predicted_test
+```
+The final submission was 100% correct, proving the accuracy of the final model.
